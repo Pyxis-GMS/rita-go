@@ -3,7 +3,6 @@ package ritago
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -207,9 +206,6 @@ func (c *RitaClient) SendEvent(channel string, data interface{}) (string, error)
 
 /*
 SubEvent returns a channel that will receive events from the specified channel.
-This method dont have a context parameter, so dont have a way to cancel the subscription.
-
-if you want to cancel the subscription, you should use SubEventX instead.
 
 Parameters:
   - channel: The name of the channel from which to receive events.
@@ -230,14 +226,11 @@ Returns:
 	...
 */
 func (c *RitaClient) SubEvent(channel string) (chan *RitaEvent, error) {
-	return c.SubEventSinceX(context.TODO(), channel, "")
+	return c.SubEventSince(channel, "")
 }
 
 /*
 SubEventSince returns a channel that will receive events from the specified channel starting from the specified event ID.
-This method dont have a context parameter, so dont have a way to cancel the subscription.
-
-if you want to cancel the subscription, you should use SubEventSinceX instead.
 
 For subscribe to the channel in the last event readed, you should use LAST_EVENT constant as eventId.
 
@@ -261,68 +254,6 @@ Returns:
 	...
 */
 func (c *RitaClient) SubEventSince(channel string, eventId string) (chan *RitaEvent, error) {
-	return c.SubEventSinceX(context.TODO(), channel, eventId)
-}
-
-/*
-SubEventX returns a channel that will receive events from the specified channel.
-This method have a context parameter, so you can cancel the subscription.
-
-Parameters:
-  - ctx: A context.Context that can be used to cancel the subscription.
-  - channel: The name of the channel from which to receive events.
-
-Returns:
-  - chan *RitaEvent: A channel that will receive events from the specified channel.
-  - error: An error if the request fails or the channel cannot be accessed.
-
-# Example
-
-	...
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	client := ritago.NewRitaClient(ritaConfig)
-
-	events, _ := client.SubEventX(ctx, "test")
-	for event := range events {
-		fmt.Println(event)
-	}
-	...
-*/
-func (c *RitaClient) SubEventX(ctx context.Context, channel string) (chan *RitaEvent, error) {
-	return c.SubEventSinceX(ctx, channel, "")
-}
-
-/*
-SubEventSinceX returns a channel that will receive events from the specified channel starting from the specified event ID.
-This method have a context parameter, so you can cancel the subscription.
-
-For subscribe to the channel in the last event readed, you should use LAST_EVENT constant as eventId.
-
-Parameters:
-  - ctx: A context.Context that can be used to cancel the subscription.
-  - channel: The name of the channel from which to receive events.
-
-Returns:
-  - chan *RitaEvent: A channel that will receive events from the specified channel.
-  - error: An error if the request fails or the channel cannot be accessed.
-
-# Example
-
-	...
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	client := ritago.NewRitaClient(ritaConfig)
-
-	events, _ := client.SubEventSinceX(ctx, "test", "event-id")
-	for event := range events {
-		fmt.Println(event)
-	}
-	...
-*/
-func (c *RitaClient) SubEventSinceX(ctx context.Context, channel string, eventId string) (chan *RitaEvent, error) {
 	channel, err := c.ensureCan(channel)
 	if err != nil {
 		return nil, err
@@ -363,8 +294,6 @@ func (c *RitaClient) SubEventSinceX(ctx context.Context, channel string, eventId
 
 	switch resp.StatusCode {
 	case 200:
-
-		d := ctx.Done()
 		ch := make(chan *RitaEvent)
 
 		reader := bufio.NewReader(resp.Body)
@@ -372,39 +301,33 @@ func (c *RitaClient) SubEventSinceX(ctx context.Context, channel string, eventId
 			return nil, UnknownError
 		}
 
-		go func() {
-			defer resp.Body.Close()
-
+		go func() { //defer resp.Body.Close()
 			for {
-				select {
-				case <-d:
-				default:
-					line, err := reader.ReadBytes('\n')
+				line, err := reader.ReadBytes('\n')
+				if err != nil {
+					fmt.Println(err)
+					continue
+				}
+
+				strLine := strings.TrimSpace(string(line))
+
+				if strings.HasPrefix(strLine, "data:") {
+					eventData := strings.TrimPrefix(strLine, "data:")
+					eventData = strings.TrimSpace(eventData)
+
+					if eventData == "" || eventData == "ping" {
+						continue
+					}
+
+					var event RitaEvent
+					err := json.Unmarshal([]byte(eventData), &event)
+
 					if err != nil {
 						fmt.Println(err)
 						continue
 					}
 
-					strLine := strings.TrimSpace(string(line))
-
-					if strings.HasPrefix(strLine, "data:") {
-						eventData := strings.TrimPrefix(strLine, "data:")
-						eventData = strings.TrimSpace(eventData)
-
-						if eventData == "" || eventData == "ping" {
-							continue
-						}
-
-						var event RitaEvent
-						err := json.Unmarshal([]byte(eventData), &event)
-
-						if err != nil {
-							fmt.Println(err)
-							continue
-						}
-
-						ch <- &event
-					}
+					ch <- &event
 				}
 			}
 		}()

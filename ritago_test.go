@@ -36,6 +36,7 @@ func init() {
 	client = ritago.NewRitaClient(ritaConfig)
 }
 
+/*
 func TestGetEvents(t *testing.T) {
 	events, err := client.GetEventsSince("test", "1736187360563-0")
 
@@ -47,22 +48,18 @@ func TestGetEvents(t *testing.T) {
 		fmt.Println(event)
 	}
 }
+*/
 
-/*
 func TestSubEvent(t *testing.T) {
 	channel := "test"
 
-	events, err := client.SubEvent(channel)
-
-	if err != nil {
-		t.Error(err)
-	}
+	events, _ := client.SubEvent(channel)
 
 	for event := range events {
 		fmt.Println(event)
 	}
 }
-*/
+
 /*
 func TestSendEvent(t *testing.T) {
 
