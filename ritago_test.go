@@ -53,11 +53,13 @@ func TestGetEvents(t *testing.T) {
 func TestSubEvent(t *testing.T) {
 	channel := "test"
 
+	fmt.Println("Start")
 	events, _ := client.SubEvent(channel)
 
 	for event := range events {
 		fmt.Println(event)
 	}
+	fmt.Println("End")
 }
 
 /*

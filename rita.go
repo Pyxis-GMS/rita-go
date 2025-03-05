@@ -306,7 +306,9 @@ func (c *RitaClient) SubEventSince(channel string, eventId string) (chan *RitaEv
 				line, err := reader.ReadBytes('\n')
 				if err != nil {
 					fmt.Println(err)
-					continue
+					resp.Body.Close()
+					close(ch)
+					break
 				}
 
 				strLine := strings.TrimSpace(string(line))
