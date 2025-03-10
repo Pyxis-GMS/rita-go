@@ -301,7 +301,7 @@ func (c *RitaClient) SubEventSince(channel string, eventId string) (chan *RitaEv
 			return nil, UnknownError
 		}
 
-		go func() {
+		go func() { // goroutine
 			for {
 				line, err := reader.ReadBytes('\n')
 				if err != nil {
